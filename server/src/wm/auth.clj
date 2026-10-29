@@ -40,6 +40,12 @@
          token (random-token)
          poll (when device? (random-token))
          code (some-> poll sha256 match-code)]
+     ;; A new desktop sign-in replaces any still-open one for this account: the app only waits for
+     ;; the newest, so an older mailed link must not silently confirm a request nobody waits for.
+     (when device?
+       (db/q1 ds ["UPDATE login_tokens SET expires_at = now()
+                   WHERE account_id = ? AND poll_hash IS NOT NULL AND used_at IS NULL AND expires_at > now()"
+                  (:id account)]))
      (db/q1 ds ["INSERT INTO login_tokens (token_hash, account_id, expires_at, poll_hash)
                  VALUES (?, ?, now() + interval '15 minutes', ?)"
                 (sha256 token) (:id account) (some-> poll sha256)])

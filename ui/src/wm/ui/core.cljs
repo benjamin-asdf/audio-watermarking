@@ -226,7 +226,7 @@
       (-> (api/peek-login token)
           (.then (fn [{:keys [status body]}]
                    (cond
-                     (not= 200 status) (swap! state assoc :error "This link is invalid or expired. Request a new one.")
+                     (not= 200 status) (swap! state assoc :error "This link is invalid or expired. If you requested several links, use the newest mail; otherwise request a new one.")
                      (:device body) (swap! state assoc :confirm-code (:code body))
                      :else (.then (api/verify-login token)
                                   (fn [{:keys [status body]}]
@@ -234,7 +234,7 @@
                                       (do (api/set-session! (:session body)) (navigate! "/works"))
                                       (swap! state assoc :error "This link is invalid or expired. Request a new one.")))))))))
     (fn []
-      (let [{:keys [email sent error device confirm-code]} @state]
+      (let [{:keys [email sent error device confirm-code sending]} @state]
         [:main
          [:h1 "Sign in"]
          (cond
@@ -245,15 +245,20 @@
            (not token)
            [:form {:on-submit (fn [e]
                                 (.preventDefault e)
-                                (-> (api/request-login email (platform/desktop?))
-                                    (.then (fn [{:keys [status body]}]
-                                             (case status
-                                               200 (swap! state assoc :device body :error nil)
-                                               204 (swap! state assoc :sent true :error nil)
-                                               (swap! state assoc :error "Please enter a valid email address."))))))}
+                                ;; Sending the mail takes a second or two; a second submit would start a
+                                ;; second sign-in and the app would wait for the wrong link.
+                                (when-not (:sending @state)
+                                  (swap! state assoc :sending true :error nil)
+                                  (-> (api/request-login email (platform/desktop?))
+                                      (.then (fn [{:keys [status body]}]
+                                               (case status
+                                                 200 (swap! state assoc :device body :sending false)
+                                                 204 (swap! state assoc :sent true :sending false)
+                                                 (swap! state assoc :sending false :error "Please enter a valid email address."))))
+                                      (.catch (fn [e] (swap! state assoc :sending false :error (str "Could not reach the server: " e)))))))}
             [:label "Email" [:input {:type "email" :required true :default-value email
                                      :on-change #(swap! state assoc :email (.. % -target -value))}]]
-            [:button "Send sign-in link"]
+            [:button {:disabled sending} (if sending "Sending…" "Send sign-in link")]
             [:p.small "No password. We email you a link."]])
          (when error [:div.banner.warn error])]))))
 

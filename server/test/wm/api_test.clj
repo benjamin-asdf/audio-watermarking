@@ -219,3 +219,16 @@
           {:keys [work-id]} (:json (call :post "/api/works" record session))]
       (is (= 422 (:status (upload sys (str "/api/works/" work-id "/embed") (.getBytes "x") session))))
       (is (= 404 (:status (call :get (str "/api/works/" work-id))))))))
+
+(deftest newer-desktop-sign-in-replaces-older
+  (let [first-req (:json (call :post "/api/auth/request" {:email "twice@x.zz" :device true}))
+        old-token (second (re-find #"#(.+)$" (:link (last @sent))))
+        {:keys [poll]} (:json (call :post "/api/auth/request" {:email "twice@x.zz" :device true}))
+        new-token (second (re-find #"#(.+)$" (:link (last @sent))))]
+    (testing "the older mail's link no longer confirms anything"
+      (is (= 401 (:status (call :post "/api/auth/peek" {:token old-token}))))
+      (is (= 401 (:status (call :post "/api/auth/verify" {:token old-token}))))
+      (is (= 410 (:status (call :post "/api/auth/poll" {:poll (:poll first-req)})))))
+    (testing "the newest one works"
+      (is (= 200 (:status (call :post "/api/auth/verify" {:token new-token}))))
+      (is (string? (get-in (call :post "/api/auth/poll" {:poll poll}) [:json :session]))))))
