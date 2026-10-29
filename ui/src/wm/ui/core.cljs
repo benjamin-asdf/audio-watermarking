@@ -99,7 +99,7 @@
 (defn drop-zone
   [{:keys [label on-file busy?]}]
   (let [over? (r/atom false)]
-    (fn [{:keys [label on-file busy?]}]
+    (fn [{:keys [label on-file busy? busy-label]}]
       [:label.drop {:class [(when @over? "over") (when busy? "busy")]
                     :on-drag-over (fn [e] (.preventDefault e) (reset! over? true))
                     :on-drag-leave #(reset! over? false)
@@ -109,7 +109,7 @@
                                (when-let [f (aget (.. e -dataTransfer -files) 0)] (on-file f)))}
        [:input {:type "file" :accept "audio/*"
                 :on-change (fn [e] (when-let [f (aget (.. e -target -files) 0)] (on-file f)))}]
-       (if busy? "Listening…" label)])))
+       (if busy? (or busy-label "Listening…") label)])))
 
 (defn path-drop-zone
   "Desktop: drop an audio file anywhere on the window, or click to pick one. Calls (on-path path)."
@@ -293,6 +293,69 @@
         (= 400 status) "Please check the fields (ISRC like DEA123456789, links starting with https://)."
         :else (or (:error body) (str "Server error " status))))
 
+(def source-url "https://github.com/benjamin-asdf/audio-watermarking")
+;; Until a packaged release exists (audiowmark is not in Debian/Ubuntu stable), the app is built from source.
+(def linux-app-url source-url)
+
+(defn- save-blob!
+  "Hands a downloaded file to the browser's save dialog."
+  [blob filename]
+  (let [url (js/URL.createObjectURL blob)
+        a (doto (js/document.createElement "a") (aset "href" url) (aset "download" filename))]
+    (.click a)
+    (js/setTimeout #(js/URL.revokeObjectURL url) 60000)))
+
+(defn web-mark
+  "Website marking: upload, the server marks and registers, the marked copy comes back."
+  []
+  (let [form (r/atom empty-record)
+        state (r/atom {:step :form})]
+    (fn []
+      (let [{:keys [step file error work-id result]} @state
+            fail! (fn [e] (swap! state assoc :step :form :error (if (map? e) (error-text e) (str e))))]
+        [:div
+         [:p "Upload your track. We add the mark, register it and send the marked copy back."]
+         [:p.small "We don't keep your file: it is deleted as soon as the marked copy is sent back. The code is "
+          [:a {:href source-url :rel "noopener"} "open source"] ", so you can check what happens to it. "
+          "On Linux you can also mark offline with the " [:a {:href linux-app-url :rel "noopener"} "desktop app"]
+          " (build it from source for now), so the audio never leaves your computer."]
+         (if (= step :done)
+           [:div
+            [:div.banner.ok [:strong "Done."] " Your marked file " [:code (:filename result)] " is downloading."]
+            [:p "Release " [:em "this"] " file. Keep the original as your master."]
+            [:button {:on-click #(save-blob! (:blob result) (:filename result))} "Download again"] " "
+            [link (str "/w/" work-id) "View public page"] " · "
+            [:a {:href "#" :on-click (fn [e] (.preventDefault e) (reset! form empty-record) (reset! state {:step :form}))} "Mark another"]]
+           [:form {:on-submit
+                   (fn [e]
+                     (.preventDefault e)
+                     (swap! state assoc :step :working :error nil)
+                     (-> (api/create-work (clean-record @form))
+                         (.then (fn [{:keys [status body] :as resp}]
+                                  (if (= 201 status)
+                                    (do (swap! state assoc :work-id (:work-id body))
+                                        (.then (api/embed-upload (:work-id body) file)
+                                               (fn [{:keys [status] :as res}]
+                                                 (if (= 200 status)
+                                                   (do (save-blob! (:blob res) (:filename res))
+                                                       (swap! state assoc :step :done :result res))
+                                                   (fail! res)))))
+                                    (fail! resp))))
+                         (.catch fail!)))}
+            [:label "Audio file (WAV, FLAC or AIFF is best, up to 150 MB)"
+             [drop-zone {:label (if file
+                                  [:span [:code.path (.-name file)] [:br] [:span.small "Drop or click to change"]]
+                                  "Drop your track here, or click to choose")
+                         :busy? (= step :working)
+                         :busy-label "Uploading and marking… this takes a moment"
+                         :on-file #(swap! state assoc :file %)}]]
+            (when (and file (not (re-find #"(?i)\.(wav|flac|aiff?)$" (.-name file))))
+              [:div.banner.warn "This is a compressed file. It works, but marking your lossless master gives the best quality."])
+            [record-form form]
+            [:button.big {:disabled (or (nil? file) (= step :working))}
+             (if (= step :working) "Marking…" "Mark and register")]])
+         (when error [:div.banner.warn error])]))))
+
 (defn mark-page
   []
   (let [form (r/atom empty-record)
@@ -304,11 +367,7 @@
          [:h1 "Mark a track"]
          (cond
            (not (api/session)) [:p "Please " [link "/login" "sign in"] " first."]
-           (not (platform/desktop?))
-           [:div
-            [:p "Marking happens on your computer, so your unreleased audio never leaves it."]
-            [:p "Download the " product " desktop app for Linux, macOS or Windows to mark tracks. "
-             "You can manage your registered works here on the website."]]
+           (not (platform/desktop?)) [web-mark]
            (= step :done)
            [:div
             [:div.banner.ok [:strong "Done."] " Your marked file: " [:code (:output report)]]
@@ -426,7 +485,8 @@
        [:main [:h1 "Not found"] [link "/" "Home"]])
      ;; AGPL section 13: users of the hosted service get a link to its source.
      [:footer.small product " · "
-      [:a {:href "https://github.com/benjamin-asdf/audio-watermarking" :rel "noopener"} "open source (AGPL)"] " · "
+      [:a {:href source-url :rel "noopener"} "open source (AGPL)"] " · marking uses "
+      [:a {:href "https://github.com/swesterfeld/audiowmark" :rel "noopener"} "audiowmark"] " by Stefan Westerfeld · "
       [:a {:href "https://benjamin-schwerdtner.de/" :rel "noopener"} "benjamin-schwerdtner.de"]]]))
 
 (defonce root (atom nil))

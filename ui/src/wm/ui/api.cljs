@@ -68,6 +68,23 @@
   [id {:keys [fingerprint sha256]}]
   (request :post (str "/api/works/" id "/finalize") {:json {:fingerprint fingerprint :audio-sha256 sha256}}))
 
+(defn embed-upload
+  "Marks an audio file on the server (the work must still be pending). Promise of
+  {:status 200 :blob :filename} or {:status :body} with the error."
+  [id file]
+  (let [lossless-wav? (re-find #"(?i)\.wav$" (.-name file))
+        url (str (api-root) "/api/works/" id "/embed?format=" (if lossless-wav? "wav" "flac")
+                 "&name=" (js/encodeURIComponent (.-name file)))]
+    (-> (js/fetch url (clj->js {:method "POST" :headers {"Authorization" (str "Bearer " (session))} :body file}))
+        (.then (fn [resp]
+                 (if (.-ok resp)
+                   (let [cd (or (.get (.-headers resp) "content-disposition") "")
+                         filename (or (second (re-find #"filename=\"([^\"]+)\"" cd)) "track.marked.flac")]
+                     (.then (.blob resp) (fn [b] {:status 200 :blob b :filename filename})))
+                   (-> (.json resp)
+                       (.then (fn [j] {:status (.-status resp) :body (kebab-json j)})
+                              (fn [_] {:status (.-status resp) :body nil})))))))))
+
 (defn version-file-url
   "proof.tsr (signed timestamp), proof.ots (OpenTimestamps) or record.json (the bytes both cover)."
   [id version file]

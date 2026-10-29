@@ -87,6 +87,12 @@
   [ds account-id work-id]
   (db/q1 ds ["SELECT * FROM works WHERE id = ? AND account_id = ?" work-id account-id]))
 
+(defn pending-own
+  "The caller's work if it still waits for its audio, else nil."
+  [ds account-id work-id]
+  (let [w (owned ds account-id work-id)]
+    (when (= "pending" (:status w)) w)))
+
 (defn finalize!
   "Called by the app after it marked and self-verified the audio locally."
   [{:keys [ds stamp-async] :as system} account-id work-id {:keys [fingerprint audio-sha256]}]

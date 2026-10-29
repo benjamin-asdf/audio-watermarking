@@ -11,7 +11,9 @@
             [reitit.ring.middleware.parameters :as parameters]
             [wm.auth :as auth]
             [wm.works :as works])
-  (:import (java.io File)))
+  (:import (java.io File FileInputStream)
+           (java.nio.file Files)
+           (java.nio.file.attribute FileAttribute)))
 
 (def WorkId [:re #"^\d{1,20}$"])
 
@@ -53,6 +55,57 @@
         (let [{:keys [candidates fingerprint]} (detect tmp)]
           {:status 200 :body (works/lookup system candidates fingerprint)}))
       (finally (.delete tmp)))))
+
+(defn- delete-tree
+  [^File dir]
+  (doseq [f (reverse (file-seq dir))] (.delete ^File f)))
+
+(defn- safe-ext
+  [name]
+  (or (some->> name (re-find #"\.([A-Za-z0-9]{1,5})$") second str/lower-case) "audio"))
+
+(defn- download-name
+  [name fmt]
+  (str (or (some-> name (str/replace #"\.[A-Za-z0-9]{1,5}$" "") (str/replace #"[^\w .()-]" "_") not-empty)
+           "track")
+       ".marked." fmt))
+
+(defn- embed-upload
+  "Website mark flow: the upload is marked in a temp dir, the work finalized and timestamped, the
+  marked copy streamed back. Both files are unlinked before the response goes out (the open stream
+  keeps the data until it is closed), so nothing stays on disk. One job at a time."
+  [{:keys [ds embed embed-lock] :as system} {:keys [account-id body] :as r}]
+  (let [id (work-id r)
+        {:keys [format name]} (get-in r [:parameters :query])
+        fmt (or format "flac")
+        w (works/pending-own ds account-id id)]
+    (cond
+      (nil? w) (do (some-> body .close) (not-found))
+      (not (.tryAcquire ^java.util.concurrent.Semaphore embed-lock))
+      (do (some-> body .close) {:status 429 :body {:error "Another track is being marked right now. Try again in a minute."}})
+      :else
+      (let [dir (.toFile (Files/createTempDirectory "wm-embed" (make-array FileAttribute 0)))]
+        (try
+          (let [in (io/file dir (str "input." (safe-ext name)))
+                out (io/file dir (str "marked." fmt))]
+            (with-open [b body] (io/copy b in))
+            (if (> (.length in) max-upload-bytes)
+              {:status 413 :body {:error "file too large"}}
+              (let [rep (try (embed in out (:payload-hex w))
+                             (catch clojure.lang.ExceptionInfo e {:error (or (:error (ex-data e)) (ex-message e))}))]
+                (cond
+                  (:error rep) {:status 422 :body {:error (str "Could not mark this file: " (:error rep))}}
+                  (not (:verified rep)) {:status 422 :body {:error "The mark could not be read back from the result. Try a longer or louder track."}}
+                  :else
+                  (let [stream (FileInputStream. out)]
+                    (works/finalize! system account-id id {:fingerprint (:fingerprint rep) :audio-sha256 (:sha256 rep)})
+                    {:status 200
+                     :headers {"Content-Type" (if (= fmt "wav") "audio/wav" "audio/flac")
+                               "Content-Disposition" (str "attachment; filename=\"" (download-name name fmt) "\"")}
+                     :body stream})))))
+          (finally
+            (delete-tree dir)
+            (.release ^java.util.concurrent.Semaphore embed-lock)))))))
 
 (defn routes
   [{:keys [ds] :as system}]
@@ -111,6 +164,12 @@
                                                                    (get-in r [:parameters :body]))
                                                 {:status 204}
                                                 (not-found)))}})]
+       ["/embed" (merge authed
+                        {:parameters {:path [:map [:id WorkId]]
+                                      :query [:map
+                                              [:format {:optional true} [:enum "flac" "wav"]]
+                                              [:name {:optional true} [:string {:max 200}]]]}
+                         :post {:handler (fn [r] (embed-upload system r))}})]
        ["/versions/:v/proof.ots" (download ds works/ots-proof "application/octet-stream" "proof.ots")]
        ["/versions/:v/proof.tsr" (download ds works/tsa-proof "application/timestamp-reply" "proof.tsr")]
        ["/versions/:v/record.json" (download ds works/record-bytes "application/json" "record.json")]]

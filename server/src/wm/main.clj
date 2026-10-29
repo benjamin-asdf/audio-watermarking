@@ -13,7 +13,7 @@
             [wm.works :as works])
   (:import (java.nio.file Files)
            (java.nio.file.attribute PosixFilePermissions)
-           (java.util.concurrent Executors TimeUnit)))
+           (java.util.concurrent Executors Semaphore TimeUnit)))
 
 (defn- env [k default] (or (System/getenv k) default))
 
@@ -40,6 +40,15 @@
       (throw (ex-info "wmark detect failed" {:error (:error r)})))
     {:candidates (mapv :payload (:candidates r))
      :fingerprint (:fingerprint r)}))
+
+(defn wmark-embed
+  "Marks input into output (lossless, by extension). Returns {:verified :fingerprint :sha256}."
+  [wmark-cmd input output payload-hex]
+  (let [{:keys [exit out]} (sh/sh wmark-cmd "embed" (str input) (str output) payload-hex)
+        r (json/read-value out json/keyword-keys-object-mapper)]
+    (when-not (zero? exit)
+      (throw (ex-info "wmark embed failed" {:error (:error r)})))
+    (select-keys r [:verified :fingerprint :sha256])))
 
 (defn log-login-link
   "Dev mail transport: prints the magic link instead of sending it."
@@ -84,7 +93,10 @@
                                      tsa/default-urls))
      :upgrade ots/upgrade
      :stamp-async (fn [f] (.submit pool ^Runnable f))
-     :detect (partial wmark-detect (env "WM_WMARK_CMD" "wmark"))}))
+     :detect (partial wmark-detect (env "WM_WMARK_CMD" "wmark"))
+     :embed (partial wmark-embed (env "WM_WMARK_CMD" "wmark"))
+     ;; Website marking: one job at a time, the box is small.
+     :embed-lock (Semaphore. 1)}))
 
 (defn -main
   [& _]

@@ -173,3 +173,47 @@
       (is (= [nil] (map :tsa-name (get-in (call :get (str "/api/works/" work-id)) [:json :versions]))))
       (works/stamp-missing-tsa! system)
       (is (= ["DigiCert"] (map :tsa-name (get-in (call :get (str "/api/works/" work-id)) [:json :versions])))))))
+
+(defn- upload
+  [sys uri ^bytes data session]
+  (let [[path query] (clojure.string/split uri #"\?" 2)]
+    ((api/handler sys) (cond-> {:request-method :post :uri path
+                                :headers {"content-type" "audio/wav" "authorization" (str "Bearer " session)}
+                                :body (java.io.ByteArrayInputStream. data)}
+                         query (assoc :query-string query)))))
+
+(deftest website-marking
+  (let [seen (atom nil)
+        sys (assoc system
+                   :embed-lock (java.util.concurrent.Semaphore. 1)
+                   :embed (fn [in out payload]
+                            (reset! seen {:in (slurp in) :payload payload :out (str out)})
+                            (spit out "MARKED")
+                            {:verified true :fingerprint fingerprint :sha256 (apply str (repeat 64 "b"))}))
+        session (login! "web-artist@example.org")
+        {:keys [work-id payload-hex]} (:json (call :post "/api/works" record session))
+        uri (str "/api/works/" work-id "/embed?name=My%20Song.wav&format=flac")
+        r (upload sys uri (.getBytes "RIFF-audio") session)]
+    (testing "marked copy comes back, named after the upload"
+      (is (= 200 (:status r)))
+      (is (= "MARKED" (slurp (:body r))))
+      (is (re-find #"My Song\.marked\.flac" (get-in r [:headers "Content-Disposition"])))
+      (is (= {:in "RIFF-audio" :payload payload-hex} (select-keys @seen [:in :payload]))))
+    (testing "temp files are gone once the response is built"
+      (is (not (.exists (java.io.File. ^String (:out @seen))))))
+    (testing "work is final, public and timestamped"
+      (is (= ["DigiCert"] (map :tsa-name (get-in (call :get (str "/api/works/" work-id)) [:json :versions])))))
+    (testing "a final work cannot be marked again; others' works are not found"
+      (is (= 404 (:status (upload sys uri (.getBytes "x") session))))
+      (is (= 404 (:status (upload sys uri (.getBytes "x") (login! "other@example.org"))))))
+    (testing "one job at a time"
+      (let [busy (assoc sys :embed-lock (java.util.concurrent.Semaphore. 0))
+            {:keys [work-id]} (:json (call :post "/api/works" record session))]
+        (is (= 429 (:status (upload busy (str "/api/works/" work-id "/embed") (.getBytes "x") session)))))))
+  (testing "unverified result is refused and the work stays pending"
+    (let [sys (assoc system :embed-lock (java.util.concurrent.Semaphore. 1)
+                     :embed (fn [_ out _] (spit out "x") {:verified false}))
+          session (login! "web-artist2@example.org")
+          {:keys [work-id]} (:json (call :post "/api/works" record session))]
+      (is (= 422 (:status (upload sys (str "/api/works/" work-id "/embed") (.getBytes "x") session))))
+      (is (= 404 (:status (call :get (str "/api/works/" work-id))))))))
