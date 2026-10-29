@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Earmark",
+  "version": "0.1.0",
+  "identifier": "de.benjamin-schwerdtner.earmark",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "../ui/build-desktop.sh"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [{ "title": "Earmark", "width": 820, "height": 900, "minWidth": 380 }],
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://localhost:8090 https:; style-src 'self' 'unsafe-inline'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage"],
+    "icon": ["icons/icon.png"]
+  }
+}

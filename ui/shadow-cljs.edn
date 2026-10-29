@@ -1,0 +1,16 @@
+{:source-paths ["src"]
+ :dependencies [[reagent "1.2.0"]]
+ :jvm-opts ["-Xmx2g"]
+ :builds
+ {:app {:target :browser
+        ;; Served by the Clojure server from resources/public, and bundled into the Tauri app.
+        :output-dir "../server/resources/public/js"
+        :asset-path "js"
+        :modules {:main {:init-fn wm.ui.core/init}}
+        :closure-defines {wm.ui.api/API_BASE ""}}
+  ;; Desktop app: same UI, bundled by Tauri, talking to the hosted API.
+  :desktop {:target :browser
+            :output-dir "../desktop/dist/js"
+            :asset-path "js"
+            :modules {:main {:init-fn wm.ui.core/init}}
+            :closure-defines {wm.ui.api/API_BASE #shadow/env ["EARMARK_API" "http://localhost:8090"]}}}}

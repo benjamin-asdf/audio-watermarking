@@ -1,0 +1,11 @@
+engine/bench/corpus/
+engine/bench/work/
+engine/bench/.venv/
+engine/bench/setup.log
+engine/bench/smoke.log
+engine/bench/logs/
+server/resources/public/js/
+engine/bench/listening/
+infra/build/
+infra/deploy.local.env
+.cpcache/

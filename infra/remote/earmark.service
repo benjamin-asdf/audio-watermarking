@@ -1,0 +1,38 @@
+## Installed by bootstrap-origin.sh as /etc/systemd/system/earmark.service.
+[Unit]
+Description=Earmark (audio watermark registry)
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=earmark
+Group=earmark
+Environment=HOME=/opt/earmark/home
+Environment=PATH=/opt/earmark/venv/bin:/opt/earmark/bin:/usr/local/bin:/usr/bin:/bin
+Environment=WM_PORT=8097
+Environment=WM_BASE_PATH=/earmark
+Environment=WM_PUBLIC_URL=https://benjamin-schwerdtner.de/earmark
+Environment=WM_ENGINE=audiowmark
+Environment=WM_WMARK_CMD=/opt/earmark/bin/wmark
+Environment=WM_SECRET_FILE=/opt/earmark/data/payload-secret
+## Login mail via mail.benjamin-schwerdtner.de (~/repos/ftlm-mail), submission port 587.
+Environment=WM_SMTP_HOST=mail.benjamin-schwerdtner.de
+Environment=WM_SMTP_PORT=587
+Environment=WM_SMTP_USER=earmark@benjamin-schwerdtner.de
+Environment="WM_MAIL_FROM=Earmark <earmark@benjamin-schwerdtner.de>"
+## WM_DB_URL (with the generated DB password) and WM_SMTP_PASSWORD (from `pass earmark-smtp-pw`)
+## live here, root:earmark 0640.
+EnvironmentFile=/opt/earmark/.env
+WorkingDirectory=/opt/earmark/code
+ExecStart=/usr/local/bin/clojure -J-Xmx512m -J-Xms128m -M:prod
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/opt/earmark/log/app.log
+StandardError=append:/opt/earmark/log/app.log
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
