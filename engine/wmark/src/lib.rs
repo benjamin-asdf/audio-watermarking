@@ -7,6 +7,8 @@
 //! audiowmark always reports candidate patterns, even for unmarked audio. Telling a real payload
 //! from noise is the server's job: real payloads carry an HMAC tag (see server `wm.payload`).
 
+pub mod earmark;
+
 use anyhow::{anyhow, bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
