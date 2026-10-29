@@ -9,3 +9,4 @@ engine/bench/listening/
 infra/build/
 infra/deploy.local.env
 .cpcache/
+__pycache__/
