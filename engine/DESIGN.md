@@ -78,3 +78,22 @@ little gain), loudness weighting (no gain on top of 96 bits).
 
 Open: 10 s crops (blocks are 5.9 s, so a 10 s clip has < 2 blocks of pilot), listening test,
 Rust port.
+
+## Status 2026-10-29 (Rust port, `engine/wmark`)
+
+The prototype is ported to Rust and the CLI is self-contained (symphonia decode, rubato resampling
+for the analysis copy, hound/flacenc output, rusty-chromaprint). No audiowmark, ffmpeg or fpcalc.
+
+- Bit-exact against the prototype (`bench/xcheck_rust.py`, 10 tracks): planned cell gains within
+  0.0002 dB, audio within 1e-6, identical SNR; Rust detects prototype marks and vice versa at rank 1.
+- Attacks (`bench/bench_rust.py`, 10 tracks × 30 s, CLI end to end, own payloads and noise draws):
+  100% on all codecs, gain, resample, low-pass, tempo ±2% and pitch +0.5 st; noise 30 dB 90%
+  (hornsound, pilot z ≈ 5.4 is borderline: 3/3 fresh noise draws hit, with Rust and prototype alike);
+  10 s crop 90%; re-record sim 90%. SNR mean 29.4 dB. Embed 0.5 s and detect 0.4 s per 30 s track
+  (prototype: 0.2 s and 1.0 s).
+- Formats (`wmark/tests/e2e.sh`): WAV 44.1/48 kHz 16/24 bit, FLAC, MP3, AAC in; WAV or FLAC out at
+  the source rate and bit depth (24 bit for lossy sources).
+- Fingerprints match fpcalc within 0.6% bit errors (resampler differences), so server comparisons
+  with earlier fingerprints keep working.
+- flacenc writes the short last frame's size as STREAMINFO's minimum block size; `audio::write`
+  patches it (else symphonia and `flac -t` miscount samples).
