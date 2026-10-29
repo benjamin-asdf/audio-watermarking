@@ -16,7 +16,7 @@ Hetzner 49.12.218.29 (project "partymaker", cx23, fsn1, Ubuntu 24.04; ufw: 443 o
   ▼
   earmark.service  127.0.0.1:8097, user earmark, -Xmx512m
     ├─ Postgres 16 (shared cluster, db + role `earmark`)
-    └─ subprocesses: /opt/earmark/bin/wmark → audiowmark 0.6.5, ffmpeg, fpcalc; ots (venv)
+    └─ subprocesses: /opt/earmark/bin/wmark (self-contained: own engine, decoding, fingerprint); ots (venv)
 ```
 
 The app is mounted at `/earmark` (`WM_BASE_PATH`): the server strips the prefix and writes it into
@@ -106,6 +106,12 @@ Desktop app pointed at production: `EARMARK_API=https://benjamin-schwerdtner.de/
     `openssl ts -verify -data record.json -in proof.tsr -CAfile /etc/ssl/certs/ca-certificates.crt`
     → OK for the demo work (a FreeTSA proof needs FreeTSA's own CA certificate instead).
   - All 4 final works in production were backfilled within a minute of the deploy.
+
+- **2026-10-29**: Own engine. `wmark` is the Rust port of the Earmark prototype (engine/DESIGN.md) and
+  needs no audiowmark, ffmpeg or fpcalc; `WM_ENGINE=earmark` (96-bit payloads). Works registered
+  before with the audiowmark engine (test and demo works only) no longer read. Smoke test and website
+  marking verified after the deploy. Bootstrap still installs audiowmark/ffmpeg/chromaprint; nothing
+  uses them any more.
 
 ## Mail
 
