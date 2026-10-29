@@ -1,0 +1,81 @@
+## Desktop installers for Linux (AppImage, deb, rpm), macOS (universal dmg) and Windows (msi, NSIS exe),
+## attached to a GitHub release. Trigger: push a tag `desktop-v<version>` (the version in
+## desktop/src-tauri/tauri.conf.json should match). The app is self-contained (own engine, no audio tools).
+## Builds are unsigned: macOS asks for right-click → Open the first time, Windows shows SmartScreen.
+name: desktop-release
+
+on:
+  push:
+    tags: ["desktop-v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            args: ""
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+          - platform: windows-latest
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Linux build dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ startsWith(matrix.platform, 'macos') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: desktop/src-tauri -> target
+
+      ## The UI (ClojureScript) is built here, not by a tauri hook: a bash hook does not run on Windows.
+      - name: Build UI
+        shell: bash
+        env:
+          EARMARK_API: https://benjamin-schwerdtner.de/earmark
+        run: |
+          cd ui && npm ci && npx shadow-cljs release desktop
+          mkdir -p ../desktop/dist
+          cp ../server/resources/public/index.html ../server/resources/public/style.css ../desktop/dist/
+
+      - name: Install the Tauri CLI
+        working-directory: desktop
+        run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Earmark desktop ${{ github.ref_name }}"
+          releaseBody: |
+            Mark your tracks offline: the audio never leaves your computer.
+            Linux: AppImage (any distribution) or .deb/.rpm. macOS: .dmg (Apple silicon and Intel). Windows: .msi or -setup.exe.
+            These builds are not signed yet. macOS: right-click the app → Open the first time. Windows: "More info" → "Run anyway".
+            Source and licence (AGPL-3.0-or-later): this repository.
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

@@ -294,8 +294,8 @@
         :else (or (:error body) (str "Server error " status))))
 
 (def source-url "https://github.com/benjamin-asdf/audio-watermarking")
-;; Until a packaged release exists (audiowmark is not in Debian/Ubuntu stable), the app is built from source.
-(def linux-app-url source-url)
+;; Installers for Linux, macOS and Windows, built by .github/workflows/desktop-release.yml.
+(def desktop-app-url (str source-url "/releases/latest"))
 
 (defn- save-blob!
   "Hands a downloaded file to the browser's save dialog."
@@ -317,8 +317,8 @@
          [:p "Upload your track. We add the mark, register it and send the marked copy back."]
          [:p.small "We don't keep your file: it is deleted as soon as the marked copy is sent back. The code is "
           [:a {:href source-url :rel "noopener"} "open source"] ", so you can check what happens to it. "
-          "On Linux you can also mark offline with the " [:a {:href linux-app-url :rel "noopener"} "desktop app"]
-          " (build it from source for now), so the audio never leaves your computer."]
+          "Prefer to keep your audio on your computer? Mark offline with the "
+          [:a {:href desktop-app-url :rel "noopener"} "desktop app"] " for Linux, macOS and Windows."]
          (if (= step :done)
            [:div
             [:div.banner.ok [:strong "Done."] " Your marked file " [:code (:filename result)] " is downloading."]

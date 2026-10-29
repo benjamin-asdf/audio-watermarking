@@ -37,7 +37,11 @@ pg_ctl -D ~/.local/share/audio-watermarking/pg -o "-p 5439 -k /tmp" -l ~/.local/
 (cd ui && npm install && npx shadow-cljs watch app)
 
 ## desktop
+ui/build-desktop.sh                  # UI into desktop/dist (EARMARK_API=… for another server)
 (cd desktop/src-tauri && cargo tauri dev)
+(cd desktop && npm ci && npm run tauri build)   # local installers
+## Release installers (Linux, macOS, Windows) via GitHub Actions: push a tag desktop-v<version>
+## (.github/workflows/desktop-release.yml); the site links /releases/latest.
 ## headless end-to-end test of the real app (Docker: WebKitGTK + Xvfb + tauri-driver):
 ## read a clip by drop; with a WAV and SERVER_LOG also sign in, mark by drop, register
 SERVER_LOG=<dev server log> desktop/e2e/run.sh <clip.mp3> [<track.wav>]

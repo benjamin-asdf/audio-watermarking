@@ -4,19 +4,35 @@
   "version": "0.1.0",
   "identifier": "de.benjamin-schwerdtner.earmark",
   "build": {
-    "frontendDist": "../dist",
-    "beforeBuildCommand": "../ui/build-desktop.sh"
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "title": "Earmark", "width": 820, "height": 900, "minWidth": 380 }],
+    "windows": [
+      {
+        "title": "Earmark",
+        "width": 820,
+        "height": 900,
+        "minWidth": 380
+      }
+    ],
     "security": {
       "csp": "default-src 'self'; connect-src 'self' http://localhost:8090 https:; style-src 'self' 'unsafe-inline'"
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage"],
-    "icon": ["icons/icon.png"]
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Benjamin Schwerdtner",
+    "copyright": "AGPL-3.0-or-later",
+    "category": "Music",
+    "shortDescription": "Inaudible name tag for your music"
   }
 }
