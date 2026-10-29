@@ -48,7 +48,7 @@
                     " The mark belongs to the work below, but this is not the registered recording: a remix, a sample, or a copied mark."]
     :id-found [:div.banner.ok [:strong "Mark found."]]
     :unknown-id [:div.banner.warn [:strong "Mark found, but its registration is not public."]]
-    :no-watermark [:div.banner [:strong "No mark found."] " This file carries no " product " mark, or it was altered too much (e.g. tempo change)."]
+    :no-watermark [:div.banner [:strong "No mark found."] " This file carries no " product " mark, or it was altered too much (heavy noise, a very short excerpt)."]
     [:div.banner.warn "Unexpected answer: " (str status)]))
 
 (defn- utc-time
@@ -485,8 +485,7 @@
        [:main [:h1 "Not found"] [link "/" "Home"]])
      ;; AGPL section 13: users of the hosted service get a link to its source.
      [:footer.small product " · "
-      [:a {:href source-url :rel "noopener"} "open source (AGPL)"] " · marking uses "
-      [:a {:href "https://github.com/swesterfeld/audiowmark" :rel "noopener"} "audiowmark"] " by Stefan Westerfeld · "
+      [:a {:href source-url :rel "noopener"} "open source (AGPL)"] " · "
       [:a {:href "https://benjamin-schwerdtner.de/" :rel "noopener"} "benjamin-schwerdtner.de"]]]))
 
 (defonce root (atom nil))

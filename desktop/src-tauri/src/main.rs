@@ -8,7 +8,7 @@ use tauri_plugin_opener::OpenerExt;
 #[tauri::command]
 async fn embed(input: String, output: String, payload: String) -> Result<wmark::EmbedReport, String> {
     tauri::async_runtime::spawn_blocking(move || {
-        wmark::embed(&wmark::Tools::locate(), &PathBuf::from(input), &PathBuf::from(output), &payload)
+        wmark::embed(&PathBuf::from(input), &PathBuf::from(output), &payload)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -17,7 +17,7 @@ async fn embed(input: String, output: String, payload: String) -> Result<wmark::
 
 #[tauri::command]
 async fn detect(input: String) -> Result<wmark::DetectReport, String> {
-    tauri::async_runtime::spawn_blocking(move || wmark::detect(&wmark::Tools::locate(), &PathBuf::from(input), false))
+    tauri::async_runtime::spawn_blocking(move || wmark::detect(&PathBuf::from(input)))
         .await
         .map_err(|e| e.to_string())?
         .map_err(|e| format!("{e:#}"))

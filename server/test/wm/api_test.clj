@@ -15,7 +15,7 @@
 (def system
   {:ds ds
    :secret (.getBytes "test-secret" "UTF-8")
-   :engine :audiowmark
+   :engine :earmark
    :public-url "http://test"
    :send-login #(swap! sent conj %)
    :stamp (fn [^bytes b] (.getBytes (str "OTS:" (count b)) "UTF-8"))
@@ -62,7 +62,7 @@
         created (call :post "/api/works" record session)
         {:keys [work-id payload-hex]} (:json created)]
     (is (= 201 (:status created)))
-    (is (= 32 (count payload-hex)))
+    (is (= 24 (count payload-hex)))
     (testing "pending works are not public"
       (is (= 404 (:status (call :get (str "/api/works/" work-id)))))
       (is (= "unknown-id" (get-in (call :post "/api/lookup" {:candidates [payload-hex]}) [:json :status]))))
@@ -83,7 +83,9 @@
                                      [:json :status])))
       (is (= "id-found" (get-in (call :post "/api/lookup" {:candidates [payload-hex]}) [:json :status])))
       (is (= "no-watermark" (get-in (call :post "/api/lookup" {:candidates [(apply str (repeat 32 "0")) "xyz"]})
-                                    [:json :status]))))
+                                    [:json :status])))
+      (testing "the detector found no sync at all: empty list"
+        (is (= "no-watermark" (get-in (call :post "/api/lookup" {:candidates []}) [:json :status])))))
     (testing "edit creates a new version; other accounts cannot edit"
       (is (= 2 (get-in (call :put (str "/api/works/" work-id) (assoc record :title "Song (v2)") session)
                        [:json :version])))

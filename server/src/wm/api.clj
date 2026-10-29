@@ -174,7 +174,7 @@
        ["/versions/:v/proof.tsr" (download ds works/tsa-proof "application/timestamp-reply" "proof.tsr")]
        ["/versions/:v/record.json" (download ds works/record-bytes "application/json" "record.json")]]
       ["/lookup" {:post {:parameters {:body [:map
-                                             [:candidates [:vector {:min 1 :max 64} [:string {:max 64}]]]
+                                             [:candidates [:vector {:max 64} [:string {:max 64}]]]
                                              [:fingerprint {:optional true} [:vector {:max 100000} :int]]]}
                          :handler (fn [r]
                                     (let [{:keys [candidates fingerprint]} (get-in r [:parameters :body])]

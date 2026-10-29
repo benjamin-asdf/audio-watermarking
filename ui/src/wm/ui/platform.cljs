@@ -45,10 +45,10 @@
                                    :paths (vec (or (.-paths p) []))})))))
 
 (defn marked-path
-  "song.wav -> song.marked.wav; lossy inputs become .flac (marks are written lossless)."
+  "song.wav -> song.marked.wav; other inputs become .flac (marks are written lossless, WAV or FLAC)."
   [path]
   (let [[_ base ext] (re-matches #"(.*)\.([^./\\]+)$" path)
-        ext (if (#{"wav" "flac" "aif" "aiff"} (some-> ext .toLowerCase)) ext "flac")]
+        ext (if (#{"wav" "flac"} (some-> ext .toLowerCase)) ext "flac")]
     (str (or base path) ".marked." ext)))
 
 (defn embed

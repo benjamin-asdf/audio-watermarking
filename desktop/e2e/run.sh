@@ -19,11 +19,9 @@ fi
 docker image inspect earmark-desktop-e2e >/dev/null 2>&1 || docker build -q -t earmark-desktop-e2e "$HERE"
 docker run --rm --network host -u "$(id -u):$(id -g)" \
   -e HOME=/tmp -e XDG_RUNTIME_DIR=/tmp \
-  -e WMARK_AUDIOWMARK=/tools/bin/audiowmark -e LD_LIBRARY_PATH=/tools/lib \
   -e E2E_SCRIPT="${E2E_SCRIPT:-test.mjs}" -e KEY_DELAY_MS -e ROUNDS -e AUDIO="/audio/$(basename "$AUDIO")" "${MARK_ENV[@]}" \
   -v "$HERE/../src-tauri/target/debug/earmark-desktop:/app/earmark-desktop:ro" \
   -v "$HOME/.cargo/bin/tauri-driver:/usr/local/bin/tauri-driver:ro" \
-  -v "$HOME/.local/bin:/tools/bin:ro" -v "$HOME/.local/lib:/tools/lib:ro" \
   -v "$(dirname "$AUDIO"):/audio:ro" -v "$HERE:/e2e:ro" -v "$OUT:/out" \
   earmark-desktop-e2e sh -c '
     Xvfb :99 -screen 0 1024x900x24 >/dev/null 2>&1 &

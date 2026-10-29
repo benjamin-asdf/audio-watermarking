@@ -156,7 +156,7 @@
        (mapv #(-> % (update :id str) (update :created-at str)))))
 
 (defn lookup
-  "Status for detector candidates (audiowmark reports noise candidates even for unmarked audio;
+  "Status for detector candidates (the detector always returns a candidate list, even for unmarked audio;
   only a payload whose HMAC tag checks out counts), optionally checked against the clip's
   fingerprint: :no-watermark | :unknown-id | :id-found (no fingerprint given) | :verified |
   :audio-differs"

@@ -24,7 +24,7 @@ re-encoded to MP3/AAC, trimmed, or as a clip — can upload it and see the recor
 | Embed location | Local (desktop app). Audio never leaves the artist's machine. Server issues the ID. |
 | Registry | Our Postgres + OpenTimestamps anchor per registration. No blockchain/wallets. |
 | Stack | Clojure backend, ClojureScript UI; same UI served as website and wrapped by Tauri for desktop. Engine is a bundled CLI sidecar. |
-| License | AGPL-3.0-or-later for the project (decided 2026-10-29); `engine/wmark` GPL-3.0-or-later while it wraps audiowmark. Revenue lives in the hosted registry (artists pay to register, lookups free), not in selling the app. |
+| License | AGPL-3.0-or-later for the project (decided 2026-10-29), engine included (own Rust engine since 2026-10-29). Revenue lives in the hosted registry (artists pay to register, lookups free), not in selling the app. |
 
 ## Payload
 

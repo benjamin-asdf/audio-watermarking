@@ -79,7 +79,7 @@
     {:ds ds
      :pool pool
      :secret (load-secret (env "WM_SECRET_FILE" (str default-data-dir "/payload-secret")))
-     :engine (keyword (env "WM_ENGINE" "audiowmark"))
+     :engine (keyword (env "WM_ENGINE" "earmark"))
      :public-url (env "WM_PUBLIC_URL" "http://localhost:8090")
      ;; Mount prefix behind a shared reverse proxy, e.g. "/earmark"; WM_PUBLIC_URL includes it.
      :base-path (str/replace (env "WM_BASE_PATH" "") #"/$" "")

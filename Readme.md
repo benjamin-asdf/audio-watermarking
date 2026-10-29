@@ -48,9 +48,9 @@ Benchmark (gamelap): `engine/bench/setup-gamelap.sh`, `make-corpus.sh`, `run-all
 
 ## Business
 
-Open source under the AGPL-3.0-or-later (`LICENSE`); `engine/wmark` is GPL-3.0-or-later (it wraps
-audiowmark), which combines with the AGPL. Revenue comes from the hosted registry: artists pay to
-register tracks, looking a file up stays free. What people pay for is the shared registry and its
+Open source under the AGPL-3.0-or-later (`LICENSE`), including the engine (`engine/wmark`, our own
+since the Rust port; audiowmark remains the benchmark baseline we measure against). Revenue comes
+from the hosted registry: artists pay to register tracks, looking a file up stays free. What people pay for is the shared registry and its
 proofs of date, which a copy of the code does not have. The AGPL makes anyone running a modified
 copy as a service publish their changes; the site links its source in the footer, as the AGPL
 requires for network use.

@@ -13,7 +13,7 @@ Environment=PATH=/opt/earmark/venv/bin:/opt/earmark/bin:/usr/local/bin:/usr/bin:
 Environment=WM_PORT=8097
 Environment=WM_BASE_PATH=/earmark
 Environment=WM_PUBLIC_URL=https://benjamin-schwerdtner.de/earmark
-Environment=WM_ENGINE=audiowmark
+Environment=WM_ENGINE=earmark
 Environment=WM_WMARK_CMD=/opt/earmark/bin/wmark
 Environment=WM_SECRET_FILE=/opt/earmark/data/payload-secret
 ## Login mail via mail.benjamin-schwerdtner.de (~/repos/ftlm-mail), submission port 587.
