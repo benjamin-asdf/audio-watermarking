@@ -4,7 +4,8 @@
             [next.jdbc :as jdbc]
             [wm.db :as db]
             [wm.fingerprint :as fp]
-            [wm.payload :as payload])
+            [wm.payload :as payload]
+            [wm.tsa :as tsa])
   (:import (java.security MessageDigest)
            (java.util HexFormat)))
 
@@ -68,6 +69,20 @@
                    work-id version])
         (println "ots stamp failed" work-id version (ex-message e))))))
 
+(defn tsa-stamp-version!
+  "Signed RFC 3161 timestamp for one record version via (:tsa-stamp system). Synchronous (one HTTP
+  round trip); failures are logged and retried by stamp-missing-tsa!."
+  [{:keys [ds tsa-stamp]} work-id version]
+  (let [{:keys [record-canonical]} (db/q1 ds ["SELECT record_canonical FROM work_versions
+                                               WHERE work_id = ? AND version = ?" work-id version])]
+    (try
+      (let [{:keys [response time url]} (tsa-stamp record-canonical)]
+        (db/q1 ds ["UPDATE work_versions SET tsa_response = ?, tsa_url = ?, tsa_time = ?
+                    WHERE work_id = ? AND version = ?"
+                   response url (java.sql.Timestamp. (.getTime ^java.util.Date time)) work-id version]))
+      (catch Exception e
+        (println "tsa stamp failed" work-id version (ex-message e) (pr-str (:errors (ex-data e))))))))
+
 (defn- owned
   [ds account-id work-id]
   (db/q1 ds ["SELECT * FROM works WHERE id = ? AND account_id = ?" work-id account-id]))
@@ -81,6 +96,7 @@
         (db/q1 tx ["UPDATE works SET status = 'final', finalized_at = now(),
                     fingerprint = ?, audio_sha256 = ? WHERE id = ?"
                    (db/int-array-param tx fingerprint) audio-sha256 work-id]))
+      (tsa-stamp-version! system work-id 1)
       (stamp-async #(stamp-version! system work-id 1)))
     true))
 
@@ -89,6 +105,7 @@
   (when (owned ds account-id work-id)
     (let [v (inc (:version (latest-version ds work-id)))]
       (insert-version! ds work-id v record)
+      (tsa-stamp-version! system work-id v)
       (stamp-async #(stamp-version! system work-id v))
       v)))
 
@@ -96,12 +113,29 @@
   [ds work-id]
   (when-let [w (db/q1 ds ["SELECT id, status, created_at, finalized_at FROM works
                            WHERE id = ? AND status = 'final'" work-id])]
-    (let [versions (db/q ds ["SELECT version, record_sha256, ots_status, created_at FROM work_versions
-                              WHERE work_id = ? ORDER BY version" work-id])]
+    (let [versions (db/q ds ["SELECT version, record_sha256, ots_status, created_at, tsa_url, tsa_time
+                              FROM work_versions WHERE work_id = ? ORDER BY version" work-id])]
       {:work-id (str (:id w))
        :registered-at (str (:finalized-at w))
        :record (:record (latest-version ds work-id))
-       :versions (mapv #(update % :created-at str) versions)})))
+       :versions (mapv (fn [{:keys [tsa-url tsa-time] :as v}]
+                         (-> (dissoc v :tsa-url :tsa-time)
+                             (update :created-at str)
+                             (cond-> tsa-time (assoc :tsa-time (str (.toInstant ^java.sql.Timestamp tsa-time))
+                                                     :tsa-name (tsa/tsa-name tsa-url)))))
+                       versions)})))
+
+(defn tsa-proof
+  [ds work-id version]
+  (:tsa-response (db/q1 ds ["SELECT tsa_response FROM work_versions WHERE work_id = ? AND version = ?"
+                            work-id version])))
+
+(defn record-bytes
+  "The exact bytes both proofs cover (canonical JSON of the record), for anyone verifying them."
+  [ds work-id version]
+  (:record-canonical (db/q1 ds ["SELECT v.record_canonical FROM work_versions v
+                                 JOIN works w ON w.id = v.work_id AND w.status = 'final'
+                                 WHERE v.work_id = ? AND v.version = ?" work-id version])))
 
 (defn ots-proof
   [ds work-id version]
@@ -143,3 +177,13 @@
     (let [{:keys [complete? ots]} (upgrade record-canonical ots)]
       (db/q1 ds ["UPDATE work_versions SET ots = ?, ots_status = ? WHERE work_id = ? AND version = ?"
                  ots (if complete? "complete" "pending") work-id version]))))
+
+(defn stamp-missing-tsa!
+  "Periodic job: signed timestamps for final works whose versions have none (TSA was down, or the
+  version predates RFC 3161 stamping)."
+  [{:keys [ds] :as system}]
+  (doseq [{:keys [work-id version]}
+          (db/q ds ["SELECT v.work_id, v.version FROM work_versions v
+                     JOIN works w ON w.id = v.work_id AND w.status = 'final'
+                     WHERE v.tsa_response IS NULL"])]
+    (tsa-stamp-version! system work-id version)))

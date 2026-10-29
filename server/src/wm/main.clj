@@ -9,6 +9,7 @@
             [wm.db :as db]
             [wm.mail :as mail]
             [wm.ots :as ots]
+            [wm.tsa :as tsa]
             [wm.works :as works])
   (:import (java.nio.file Files)
            (java.nio.file.attribute PosixFilePermissions)
@@ -77,6 +78,10 @@
      :cors-origins (remove str/blank? (str/split (env "WM_CORS_ORIGINS" "") #"\s*,\s*"))
      :send-login (login-transport)
      :stamp ots/stamp
+     ;; RFC 3161 TSAs, tried in order. Comma separated override: WM_TSA_URLS.
+     :tsa-stamp (partial tsa/stamp (if-let [u (env "WM_TSA_URLS" nil)]
+                                     (str/split u #"\s*,\s*")
+                                     tsa/default-urls))
      :upgrade ots/upgrade
      :stamp-async (fn [f] (.submit pool ^Runnable f))
      :detect (partial wmark-detect (env "WM_WMARK_CMD" "wmark"))}))
@@ -87,8 +92,10 @@
         port (parse-long (env "WM_PORT" "8090"))]
     (db/migrate! ds)
     (doto (Executors/newSingleThreadScheduledExecutor)
-      (.scheduleWithFixedDelay #(try (works/upgrade-pending-proofs! sys)
-                                     (catch Exception e (println "ots upgrade job:" (ex-message e))))
+      (.scheduleWithFixedDelay #(do (try (works/upgrade-pending-proofs! sys)
+                                         (catch Exception e (println "ots upgrade job:" (ex-message e))))
+                                    (try (works/stamp-missing-tsa! sys)
+                                         (catch Exception e (println "tsa backfill job:" (ex-message e)))))
                                1 30 TimeUnit/MINUTES))
     (http/run-server (api/handler sys) {:ip (env "WM_BIND" "127.0.0.1") :port port :max-body api/max-upload-bytes})
     (println "listening on" port)))

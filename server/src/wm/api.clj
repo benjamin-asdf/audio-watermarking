@@ -19,6 +19,18 @@
 
 (defn- not-found [] {:status 404 :body {:error "not found"}})
 
+(defn- download
+  "Route data for a per-version file: (fetch ds work-id version) -> bytes or nil."
+  [ds fetch content-type filename]
+  {:parameters {:path [:map [:id WorkId] [:v :int]]}
+   :get {:handler (fn [r]
+                    (if-let [b (fetch ds (work-id r) (get-in r [:parameters :path :v]))]
+                      {:status 200
+                       :headers {"Content-Type" content-type
+                                 "Content-Disposition" (str "attachment; filename=\"" filename "\"")}
+                       :body (java.io.ByteArrayInputStream. b)}
+                      (not-found)))}})
+
 (defn- wrap-account
   "Requires a valid bearer session; puts :account-id on the request."
   [handler system]
@@ -99,15 +111,9 @@
                                                                    (get-in r [:parameters :body]))
                                                 {:status 204}
                                                 (not-found)))}})]
-       ["/versions/:v/proof.ots"
-        {:parameters {:path [:map [:id WorkId] [:v :int]]}
-         :get {:handler (fn [r]
-                          (if-let [b (works/ots-proof ds (work-id r) (get-in r [:parameters :path :v]))]
-                            {:status 200
-                             :headers {"Content-Type" "application/octet-stream"
-                                       "Content-Disposition" "attachment; filename=\"proof.ots\""}
-                             :body (java.io.ByteArrayInputStream. b)}
-                            (not-found)))}}]]
+       ["/versions/:v/proof.ots" (download ds works/ots-proof "application/octet-stream" "proof.ots")]
+       ["/versions/:v/proof.tsr" (download ds works/tsa-proof "application/timestamp-reply" "proof.tsr")]
+       ["/versions/:v/record.json" (download ds works/record-bytes "application/json" "record.json")]]
       ["/lookup" {:post {:parameters {:body [:map
                                              [:candidates [:vector {:min 1 :max 64} [:string {:max 64}]]]
                                              [:fingerprint {:optional true} [:vector {:max 100000} :int]]]}

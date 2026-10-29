@@ -68,6 +68,7 @@
   [id {:keys [fingerprint sha256]}]
   (request :post (str "/api/works/" id "/finalize") {:json {:fingerprint fingerprint :audio-sha256 sha256}}))
 
-(defn proof-url
-  [id version]
-  (str (api-root) "/api/works/" id "/versions/" version "/proof.ots"))
+(defn version-file-url
+  "proof.tsr (signed timestamp), proof.ots (OpenTimestamps) or record.json (the bytes both cover)."
+  [id version file]
+  (str (api-root) "/api/works/" id "/versions/" version "/" file))

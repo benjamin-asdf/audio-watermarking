@@ -4,7 +4,8 @@
             [jsonista.core :as json]
             [next.jdbc :as jdbc]
             [wm.api :as api]
-            [wm.db :as db]))
+            [wm.db :as db]
+            [wm.works :as works]))
 
 (def ds (db/datasource (or (System/getenv "WM_TEST_DB_URL")
                            "jdbc:postgresql://localhost:5439/wm_test?user=wm")))
@@ -18,7 +19,10 @@
    :public-url "http://test"
    :send-login #(swap! sent conj %)
    :stamp (fn [^bytes b] (.getBytes (str "OTS:" (count b)) "UTF-8"))
-   :stamp-async (fn [f] (f))})
+   :stamp-async (fn [f] (f))
+   :tsa-stamp (fn [^bytes b] {:response (.getBytes (str "TSR:" (count b)) "UTF-8")
+                              :time (java.util.Date. 1793300000000)
+                              :url "http://timestamp.digicert.com"})})
 
 (defn reset-db
   [t]
@@ -68,7 +72,10 @@
     (testing "public view with stamped first version"
       (let [{:keys [json]} (call :get (str "/api/works/" work-id))]
         (is (= record (:record json)))
-        (is (= ["pending"] (map :ots-status (:versions json))))))
+        (is (= ["pending"] (map :ots-status (:versions json))))
+        (testing "signed timestamp right at finalize"
+          (is (= ["DigiCert"] (map :tsa-name (:versions json))))
+          (is (= ["2026-10-29T18:53:20Z"] (map :tsa-time (:versions json)))))))
     (testing "lookup statuses"
       (is (= "verified" (get-in (call :post "/api/lookup" {:candidates ["ffff" payload-hex] :fingerprint (subvec fingerprint 50 120)})
                                 [:json :status])))
@@ -82,8 +89,12 @@
                        [:json :version])))
       (is (= 404 (:status (call :put (str "/api/works/" work-id) record (login! "other@example.org")))))
       (is (= "Song (v2)" (get-in (call :get (str "/api/works/" work-id)) [:json :record :title]))))
-    (testing "proof download"
-      (is (= 200 (:status (call :get (str "/api/works/" work-id "/versions/1/proof.ots"))))))
+    (testing "proof downloads"
+      (is (= 200 (:status (call :get (str "/api/works/" work-id "/versions/1/proof.ots")))))
+      (is (= 200 (:status (call :get (str "/api/works/" work-id "/versions/1/proof.tsr")))))
+      (is (= 200 (:status (call :get (str "/api/works/" work-id "/versions/2/proof.tsr")))))
+      (is (= 200 (:status (call :get (str "/api/works/" work-id "/versions/1/record.json")))))
+      (is (= 404 (:status (call :get (str "/api/works/" work-id "/versions/9/record.json"))))))
     (testing "own works list"
       (is (= [work-id] (map :id (:json (call :get "/api/me/works" nil session))))))))
 
@@ -146,3 +157,19 @@
   (is (= 204 (:status (call :post "/api/auth/request" {:email "web@x.zz"}))))
   (let [token (second (re-find #"#(.+)$" (:link (last @sent))))]
     (is (= {:device false} (:json (call :post "/api/auth/peek" {:token token}))))))
+
+(deftest tsa-down-at-finalize
+  (testing "finalize still succeeds; the backfill job stamps later"
+    (let [down (assoc system :tsa-stamp (fn [_] (throw (ex-info "no TSA answered" {:errors ["x: down"]}))))
+          session (login! "artist@example.org")
+          {:keys [work-id]} (:json (call :post "/api/works" record session))
+          handler (api/handler down)
+          r (handler {:request-method :post :uri (str "/api/works/" work-id "/finalize")
+                      :headers {"content-type" "application/json" "authorization" (str "Bearer " session)}
+                      :body (java.io.ByteArrayInputStream.
+                             (json/write-value-as-bytes {:fingerprint fingerprint
+                                                         :audio-sha256 (apply str (repeat 64 "a"))}))})]
+      (is (= 204 (:status r)))
+      (is (= [nil] (map :tsa-name (get-in (call :get (str "/api/works/" work-id)) [:json :versions]))))
+      (works/stamp-missing-tsa! system)
+      (is (= ["DigiCert"] (map :tsa-name (get-in (call :get (str "/api/works/" work-id)) [:json :versions])))))))

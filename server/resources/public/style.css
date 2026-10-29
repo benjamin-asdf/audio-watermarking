@@ -55,3 +55,6 @@ code.path { font-size: .85rem; color: var(--muted); overflow-wrap: anywhere; }
 ul.works { list-style: none; padding: 0; }
 ul.works li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 footer { margin-top: 64px; padding-bottom: 32px; }
+details.small { margin-top: 4px; }
+details.small summary { cursor: pointer; width: max-content; }
+details.small p { margin: 6px 0 0; }

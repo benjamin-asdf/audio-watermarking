@@ -48,3 +48,9 @@ CREATE TABLE IF NOT EXISTS work_versions (
   created_at timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (work_id, version)
 );
+
+-- RFC 3161 timestamp per version, signed by a public TSA (wm.tsa), the proof shown first.
+-- OpenTimestamps (ots above) stays as a second, long-term proof.
+ALTER TABLE work_versions ADD COLUMN IF NOT EXISTS tsa_response bytea;
+ALTER TABLE work_versions ADD COLUMN IF NOT EXISTS tsa_url text;
+ALTER TABLE work_versions ADD COLUMN IF NOT EXISTS tsa_time timestamptz;

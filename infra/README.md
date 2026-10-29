@@ -98,6 +98,15 @@ Desktop app pointed at production: `EARMARK_API=https://benjamin-schwerdtner.de/
     signature; smoke test `verified` / `no-watermark`. Device sign-in and `WM_CORS_ORIGINS` code went
     live with this deploy.
 
+- **2026-10-29**: Signed timestamps (RFC 3161) as the shown proof of date.
+  - `wm.tsa` asks DigiCert (`http://timestamp.digicert.com`), falls back to FreeTSA, at finalize and on
+    each edit; the 30-min job backfills versions without one. OpenTimestamps keeps running as the
+    second, long-term proof. Override the TSAs with `WM_TSA_URLS` (comma separated).
+  - Downloads per version: `proof.tsr`, `proof.ots`, `record.json` (the bytes both proofs cover).
+    `openssl ts -verify -data record.json -in proof.tsr -CAfile /etc/ssl/certs/ca-certificates.crt`
+    → OK for the demo work (a FreeTSA proof needs FreeTSA's own CA certificate instead).
+  - All 4 final works in production were backfilled within a minute of the deploy.
+
 ## Mail
 
 | | |

@@ -51,6 +51,33 @@
     :no-watermark [:div.banner [:strong "No mark found."] " This file carries no " product " mark, or it was altered too much (e.g. tempo change)."]
     [:div.banner.warn "Unexpected answer: " (str status)]))
 
+(defn- utc-time
+  [iso]
+  (str (.toLocaleString (js/Date. iso) "en-GB" #js {:timeZone "UTC" :dateStyle "medium" :timeStyle "short"})
+       " UTC"))
+
+(defn proof-of-date
+  "Signed timestamp (RFC 3161) first; OpenTimestamps as the second, long-term proof."
+  [work-id {:keys [version tsa-time tsa-name ots-status]}]
+  (let [file (fn [f label] [:a {:href (api/version-file-url work-id version f)} label])]
+    [:<> [:dt "Proof of date"]
+     [:dd
+      (if tsa-time
+        [:span "Signed " (utc-time tsa-time) " by " tsa-name "'s timestamp service · " (file "proof.tsr" "download proof")]
+        [:span "Being signed, check back in a few minutes"])
+      [:details.small
+       [:summary "What is this?"]
+       [:p "An independent timestamp service signed a fingerprint of this record. The signature shows "
+        "that this exact record existed at that time, and anyone can check it without trusting "
+        product ": download the " (file "record.json" "record") " and the proof, then run "
+        [:code "openssl ts -verify -data record.json -in proof.tsr -CAfile <CA certificates>"] "."]
+       (when (#{"pending" "complete"} ots-status)
+         [:p "A second, independent proof comes from the public "
+          [:a {:href "https://opentimestamps.org" :rel "noopener noreferrer" :target "_blank"} "OpenTimestamps"]
+          " system and keeps working even if a timestamp service shuts down: "
+          (file "proof.ots" "proof.ots")
+          (when (= "pending" ots-status) " (ready within a few hours)") "."])]]]))
+
 (defn record-card
   [{:keys [work-id record registered-at versions]}]
   (let [{:keys [artist title isrc links contact license]} record
@@ -66,11 +93,7 @@
         [:<> [:dt "Links"] [:dd (for [l links] ^{:key l} [:div [:a {:href l :rel "noopener noreferrer" :target "_blank"} l]])]])
       [:dt "Registered"] [:dd (some-> registered-at (subs 0 10))]
       (when latest
-        [:<> [:dt "Timestamp proof"]
-         [:dd (case (:ots-status latest)
-                "complete" [:a {:href (api/proof-url work-id (:version latest))} "Bitcoin-anchored proof (.ots)"]
-                "pending" [:span "Pending Bitcoin confirmation · " [:a {:href (api/proof-url work-id (:version latest))} "proof (.ots)"]]
-                "unavailable")]])]
+        [proof-of-date work-id latest])]
      [:div.small [link (str "/w/" work-id) "Permalink"]]]))
 
 (defn drop-zone
@@ -401,7 +424,9 @@
        :mark [mark-page]
        :work ^{:key arg} [work-page arg]
        [:main [:h1 "Not found"] [link "/" "Home"]])
-     [:footer.small product " · open source · "
+     ;; AGPL section 13: users of the hosted service get a link to its source.
+     [:footer.small product " · "
+      [:a {:href "https://github.com/benjamin-asdf/audio-watermarking" :rel "noopener"} "open source (AGPL)"] " · "
       [:a {:href "https://benjamin-schwerdtner.de/" :rel "noopener"} "benjamin-schwerdtner.de"]]]))
 
 (defonce root (atom nil))
